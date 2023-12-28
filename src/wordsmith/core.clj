@@ -10,6 +10,7 @@
    handlers/logout
    handlers/admin-posts
    handlers/admin-post
+   handlers/favicon
    handlers/blog-posts
    handlers/blog-post])
 
@@ -41,8 +42,8 @@
         path-parts (string/split path #"/")
         joined-parts (into [] (map #(vector %1 %2) uri-parts path-parts))]
     (->> (map #(when (string/starts-with? (second %) ":")
-                   {(keyword (subs (second %) 1)) (first %)})
-               joined-parts)
+                 {(keyword (subs (second %) 1)) (first %)})
+              joined-parts)
          (remove nil?)
          (into []))))
 
@@ -57,10 +58,12 @@
 (defn parse-response-type
   "Returns the correct MIME type for a given `response-type`."
   [response-type]
-  (case response-type
-    :html "text/html"
-    :json "application/json"
-    "text/plain"))
+  (if (string? response-type)
+    response-type
+    (case response-type
+      :html "text/html"
+      :json "application/json"
+      "text/plain")))
 
 (defn resolve-handler
   "Resolves a given `handler` with a given `req` by calling the handler 
@@ -83,6 +86,8 @@
 (defn run [_]
   (println "Starting server on port 8080")
   (http/run-server app-handler {:port 8080}))
+
+
 
 
 

@@ -1,6 +1,7 @@
 {:paths ["src"]
  :deps 
- {http-kit/http-kit {:mvn/version "2.7.0"}} 
+ {http-kit/http-kit {:mvn/version "2.7.0"}
+  hiccup/hiccup {:mvn/version "2.0.0-RC2"}} 
  :aliases
  {:repl/conjure
   {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}
