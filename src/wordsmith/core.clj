@@ -1,8 +1,13 @@
 (ns wordsmith.core
   (:require
+   [clojure.data.json :as json]
    [clojure.string :as string]
+   [hiccup2.core :as h]
    [org.httpkit.server :as http]
-   [wordsmith.handlers :as handlers]))
+   [wordsmith.components :refer [*csrf]]
+   [wordsmith.handlers :as handlers])
+  (:import
+   (java.net URLDecoder)))
 
 (def registered-handlers
   [handlers/login
@@ -51,6 +56,7 @@
   "Returns the first handler that matches a given `req` from a given 
   list of `handlers`."
   [req]
+  (prn "REQ: " req)
   (->> registered-handlers
        (filter #(matches-handler? % req))
        first))
@@ -62,8 +68,22 @@
     response-type
     (case response-type
       :html "text/html"
+      :hiccup "text/html"
       :json "application/json"
       "text/plain")))
+
+(defn parse-response-body
+  "Returns the correct response body for a given `response` and 
+  `response-type`."
+  [response response-type]
+  (if (string? response-type)
+    response
+    (case response-type
+      :hiccup (if (string? response)
+                response
+                (-> response h/html str))
+      :json (json/write-str response)
+      response)))
 
 (defn resolve-handler
   "Resolves a given `handler` with a given `req` by calling the handler 
@@ -73,19 +93,44 @@
         result (handler (assoc req :route-params (uri-kw-parts (:uri req) (:request/path m))))]
     {:status (:response/status m)
      :headers {"Content-Type" (parse-response-type (:response/type m))}
-     :body result}))
+     :body (parse-response-body result (:response/type m))}))
+
+(defn parse-request-post-body
+  "Parses the request's POST body and returns a map of the form data."
+  [req]
+  (let [body (slurp (:body req))
+        params (string/split body #"&")
+        params (map #(string/split % #"=") params)
+        params (map #(vector (keyword (first %)) (URLDecoder/decode (or (second %) "") "UTF-8")) params)]
+    (into {} params)))
+
+(defn parse-req
+  [req]
+  (merge req
+         (when (= (:request-method req) :post)
+           (let [parsed-body (parse-request-post-body req)]
+             {:parsed-body parsed-body}
+             {:csrf-ok? (let [csrf-token @*csrf]
+                          (reset! *csrf (str (random-uuid)))
+                          (= (:_csrf parsed-body) csrf-token))})))) 
 
 (defn app-handler
   [req]
-  (if-let [handler (find-handler req)]
-    (resolve-handler handler req)
-    {:status 404
-     :headers {"Content-Type" "text/html"}
-     :body "Not Found"}))
+  (let [parsed-req (parse-req req)]
+    (if-let [handler (find-handler parsed-req)]
+      (resolve-handler handler parsed-req)
+      {:status 404
+       :headers {"Content-Type" "text/html"}
+       :body "Not Found"})))
 
+#_:clj-kondo/ignore
 (defn run [_]
   (println "Starting server on port 8080")
   (http/run-server app-handler {:port 8080}))
+
+
+
+
 
 
 

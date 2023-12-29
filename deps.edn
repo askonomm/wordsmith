@@ -1,7 +1,8 @@
 {:paths ["src"]
- :deps 
+ :deps
  {http-kit/http-kit {:mvn/version "2.7.0"}
-  hiccup/hiccup {:mvn/version "2.0.0-RC2"}} 
+  hiccup/hiccup {:mvn/version "2.0.0-RC2"}
+  org.clojure/data.json {:mvn/version "2.5.0"}}
  :aliases
  {:repl/conjure
   {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}
@@ -9,5 +10,6 @@
    :main-opts ["--main" "nrepl.cmdline"
                "--middleware" "[cider.nrepl/cider-middleware]"
                "--interactive"]}}}
-  
-  
+
+
+

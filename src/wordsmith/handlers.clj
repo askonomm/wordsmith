@@ -1,14 +1,23 @@
 (ns wordsmith.handlers
   (:require
-    [hiccup2.core :as h]))
+   [hiccup2.core :as h]
+   [wordsmith.components :refer [auth-container csrf *csrf]]))
 
-(def login 
+(def login
   ^{:request/method :get
     :request/path "/admin/login"
     :response/status 200
-    :response/type :html}
-  (fn [req]
-    "Login goes here."))
+    :response/type :hiccup}
+  (fn [_]
+    (auth-container
+     "Login"
+     [:form {:method "post"}
+      (csrf)
+      [:label {:for "email"} "E-mail"]
+      [:input {:type "email" :name "email"}]
+      [:label {:for "password"} "Password"]
+      [:input {:type "password" :name "password"}]
+      [:button {:type "submit"} "Login"]])))
 
 (def do-login
   ^{:request/method :post
@@ -16,7 +25,12 @@
     :response/status 200
     :response/type :html}
   (fn [req]
-    "Login post goes here."))
+    (let [csrf-ok? (:csrf-ok? req)
+          email (get-in req [:parsed-body :email])
+          password (get-in req [:parsed-body :passwor])]
+      (prn "____")
+      (prn csrf-ok?)
+      "Login post goes here.")))
 
 (def logout
   ^{:request/method :get
@@ -44,7 +58,7 @@
     "Admin post goes here."))
 
 ;; TODO: Get site title from config.
-(def favicon 
+(def favicon
   ^{:request/method :get
     :request/path "/favicon.ico"
     :response/status 200
@@ -65,7 +79,7 @@
                  :font-size "4em"
                  :font-family "Arial, Helvetica, sans-serif"
                  :font-weight "bold"
-                 :dy ".3em"}        
+                 :dy ".3em"}
           "A"]]
         h/html
         str)))
@@ -86,4 +100,6 @@
   (fn [req]
     (prn (:route-params req))
     "Post goes here."))
+
+
 
