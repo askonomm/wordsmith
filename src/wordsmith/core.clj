@@ -105,6 +105,10 @@
     (into {} params)))
 
 (defn parse-req
+  "Parses the request and returns a map of the request's data.
+  If the request is a POST request, it also parses the POST body and
+  adds it to the map. It also checks the CSRF token and adds a `csrf-ok?`
+  key to the map."
   [req]
   (merge req
          (when (= (:request-method req) :post)
