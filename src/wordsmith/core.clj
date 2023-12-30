@@ -22,7 +22,7 @@
 (defn uri-matches-path?
   "Predicate fn that checks if a given `uri` matches a given `path`. 
   It also has support for path parameters, which are prefixed with a colon."
-  [uri path]
+  [^String uri ^String path]
   (let [uri-parts (string/split uri #"/")
         path-parts (string/split path #"/")
         joined-parts (into [] (map #(vector %1 %2) uri-parts path-parts))]
@@ -31,10 +31,10 @@
                       (string/starts-with? (second %) ":"))
                  joined-parts))))
 
-(defn matches-handler?
+(defn req-matches-handler?
   "Predicate fn that checks if a given `req` matches a given `handler` by 
   comparing the request's URI and method with the handler's URI and method."
-  [handler req]
+  [req handler]
   (let [m (meta handler)]
     (and (uri-matches-path? (:uri req) (:request/path m))
          (= (:request-method req) (:request/method m)))))
@@ -42,7 +42,7 @@
 (defn uri-kw-parts
   "Returns a map of path parameters and their values from a given `uri` 
   and `path`."
-  [uri path]
+  [^String uri ^String path]
   (let [uri-parts (string/split uri #"/")
         path-parts (string/split path #"/")
         joined-parts (into [] (map #(vector %1 %2) uri-parts path-parts))]
@@ -56,44 +56,54 @@
   "Returns the first handler that matches a given `req` from a given 
   list of `handlers`."
   [req]
-  (prn "REQ: " req)
   (->> registered-handlers
-       (filter #(matches-handler? % req))
+       (filter #(req-matches-handler? req %))
        first))
 
-(defn parse-response-type
-  "Returns the correct MIME type for a given `response-type`."
-  [response-type]
-  (if (string? response-type)
-    response-type
-    (case response-type
-      :html "text/html"
-      :hiccup "text/html"
-      :json "application/json"
-      "text/plain")))
+(defmulti parse-response 
+  (fn [_ response-type] 
+    response-type))
 
-(defn parse-response-body
-  "Returns the correct response body for a given `response` and 
-  `response-type`."
-  [response response-type]
-  (if (string? response-type)
-    response
-    (case response-type
-      :hiccup (if (string? response)
-                response
-                (-> response h/html str))
-      :json (json/write-str response)
-      response)))
+; TODO: Add support for flash messages.
+; TODO: Add support for cookies.
+(defmethod parse-response :redirect
+  [response _]
+  {:status 302
+   :headers {"Location" (:to response)}
+   :body ""})
+
+(defmethod parse-response :hiccup
+  [response _]
+  {:status (or (:response/status (meta response)) 200)
+   :headers {"Content-Type" "text/html"}
+   :body (-> response h/html str)})
+
+(defmethod parse-response :html
+  [response _]
+  {:status (or (:response/status (meta response)) 200)
+   :headers {"Content-Type" "text/html"}
+   :body response})
+
+(defmethod parse-response :json
+  [response _]
+  {:status (or (:response/status (meta response)) 200)
+   :headers {"Content-Type" "application/json"}
+   :body (json/write-str response)})
+
+(defmethod parse-response :default
+  [response _]
+  {:status (or (:response/status (meta response)) 200)
+   :headers {"Content-Type" "text/plain"}
+   :body response})
 
 (defn resolve-handler
   "Resolves a given `handler` with a given `req` by calling the handler 
   with the request and adding the path parameters to the request."
   [handler req]
   (let [m (meta handler)
-        result (handler (assoc req :route-params (uri-kw-parts (:uri req) (:request/path m))))]
-    {:status (:response/status m)
-     :headers {"Content-Type" (parse-response-type (:response/type m))}
-     :body (parse-response-body result (:response/type m))}))
+        result (handler (assoc req :route-params
+                               (uri-kw-parts (:uri req) (:request/path m))))]
+    (parse-response result (:response/type m))))
 
 (defn parse-request-post-body
   "Parses the request's POST body and returns a map of the form data."
@@ -101,7 +111,9 @@
   (let [body (slurp (:body req))
         params (string/split body #"&")
         params (map #(string/split % #"=") params)
-        params (map #(vector (keyword (first %)) (URLDecoder/decode (or (second %) "") "UTF-8")) params)]
+        params (map #(vector (keyword (first %))
+                             (URLDecoder/decode (or (second %) "") "UTF-8"))
+                    params)]
     (into {} params)))
 
 (defn parse-req
@@ -113,32 +125,28 @@
   (merge req
          (when (= (:request-method req) :post)
            (let [parsed-body (parse-request-post-body req)]
-             {:parsed-body parsed-body}
+             {:body parsed-body}
              {:csrf-ok? (let [csrf-token @*csrf]
                           (reset! *csrf (str (random-uuid)))
-                          (= (:_csrf parsed-body) csrf-token))})))) 
+                          (= (:_csrf parsed-body) csrf-token))}))))
 
 (defn app-handler
   [req]
-  (let [parsed-req (parse-req req)]
-    (if-let [handler (find-handler parsed-req)]
-      (resolve-handler handler parsed-req)
-      {:status 404
+  (let [{:keys [csrf-ok?] :as parsed-req} (parse-req req)
+        req (dissoc parsed-req :csrf-ok?)]
+    (if (and (not (nil? csrf-ok?))
+             (not csrf-ok?))
+      {:status 403
        :headers {"Content-Type" "text/html"}
-       :body "Not Found"})))
+       :body "Forbidden"}
+      (if-let [handler (find-handler req)]
+        (resolve-handler handler req)
+        {:status 404
+         :headers {"Content-Type" "text/html"}
+         :body "Not Found"}))))
 
 #_:clj-kondo/ignore
 (defn run [_]
   (println "Starting server on port 8080")
   (http/run-server app-handler {:port 8080}))
-
-
-
-
-
-
-
-
-
-
 

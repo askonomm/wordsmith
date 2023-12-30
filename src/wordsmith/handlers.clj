@@ -1,13 +1,14 @@
 (ns wordsmith.handlers
   (:require
    [hiccup2.core :as h]
-   [wordsmith.components :refer [auth-container csrf *csrf]]))
+   [wordsmith.components :refer [auth-container csrf]]
+   [wordsmith.data :as data]))
 
 (def login
   ^{:request/method :get
     :request/path "/admin/login"
     :response/status 200
-    :response/type :hiccup}
+    :response/type :html}
   (fn [_]
     (auth-container
      "Login"
@@ -23,14 +24,14 @@
   ^{:request/method :post
     :request/path "/admin/login"
     :response/status 200
-    :response/type :html}
-  (fn [req]
-    (let [csrf-ok? (:csrf-ok? req)
-          email (get-in req [:parsed-body :email])
-          password (get-in req [:parsed-body :passwor])]
-      (prn "____")
-      (prn csrf-ok?)
-      "Login post goes here.")))
+    :response/type :redirect}
+  (fn [{:keys [body]}]
+    (let [{:keys [email password]} body]
+      (if-let [auth-token (data/authenticate-account email password)]
+        {:to "/admin/posts"
+         :cookie {:token auth-token}}
+        {:to "/admin/login"
+         :flash {:error "Invalid e-mail or password."}}))))
 
 (def logout
   ^{:request/method :get
@@ -100,6 +101,7 @@
   (fn [req]
     (prn (:route-params req))
     "Post goes here."))
+
 
 
 
