@@ -14,12 +14,14 @@
    handlers/do-login
    handlers/logout
    handlers/admin-posts
-   handlers/admin-post
+   handlers/admin-create-post
+   handlers/admin-edit-post
+   handlers/admin-delete-post
    handlers/favicon
    handlers/blog-posts
    handlers/blog-post])
 
-(defn uri-matches-path?
+(defn- uri-matches-path?
   "Predicate fn that checks if a given `uri` matches a given `path`. 
   It also has support for path parameters, which are prefixed with a colon."
   [^String uri ^String path]
@@ -31,7 +33,7 @@
                       (string/starts-with? (second %) ":"))
                  joined-parts))))
 
-(defn req-matches-handler?
+(defn- req-matches-handler?
   "Predicate fn that checks if a given `req` matches a given `handler` by 
   comparing the request's URI and method with the handler's URI and method."
   [req handler]
@@ -39,7 +41,7 @@
     (and (uri-matches-path? (:uri req) (:request/path m))
          (= (:request-method req) (:request/method m)))))
 
-(defn uri-kw-parts
+(defn- uri-kw-parts
   "Returns a map of path parameters and their values from a given `uri` 
   and `path`."
   [^String uri ^String path]
@@ -52,7 +54,7 @@
          (remove nil?)
          (into []))))
 
-(defn find-handler
+(defn- find-handler
   "Returns the first handler that matches a given `req` from a given 
   list of `handlers`."
   [req]
@@ -60,43 +62,56 @@
        (filter #(req-matches-handler? req %))
        first))
 
-(defmulti parse-response 
-  (fn [_ response-type] 
+(defn- with-headers
+  "Returns a new map with the given `headers` merged with the given `map`."
+  [{:keys [cookie]} headers]
+  (merge
+   headers
+   (when-let [[k v] cookie]
+     (if (nil? v)
+       {"Set-Cookie" (str (subs (str k) 1) "=; max-age=0; Path=/")}
+       {"Set-Cookie" (str (subs (str k) 1) "=" v "; max-age=31536000; Path=/")}))))
+
+(def ^:private *flash-data (atom nil))
+
+(defmulti parse-response
+  (fn [{:keys [flash]} response-type]
+    (if flash
+      (reset! *flash-data flash)
+      (reset! *flash-data nil))
     response-type))
 
-; TODO: Add support for flash messages.
-; TODO: Add support for cookies.
 (defmethod parse-response :redirect
   [response _]
   {:status 302
-   :headers {"Location" (:to response)}
+   :headers (with-headers response {"Location" (:to response)})
    :body ""})
 
 (defmethod parse-response :hiccup
   [response _]
   {:status (or (:response/status (meta response)) 200)
-   :headers {"Content-Type" "text/html"}
+   :headers (with-headers response {"Content-Type" "text/html"})
    :body (-> response h/html str)})
 
 (defmethod parse-response :html
   [response _]
   {:status (or (:response/status (meta response)) 200)
-   :headers {"Content-Type" "text/html"}
+   :headers (with-headers response {"Content-Type" "text/html"})
    :body response})
 
 (defmethod parse-response :json
   [response _]
   {:status (or (:response/status (meta response)) 200)
-   :headers {"Content-Type" "application/json"}
+   :headers (with-headers response {"Content-Type" "application/json"})
    :body (json/write-str response)})
 
 (defmethod parse-response :default
   [response _]
   {:status (or (:response/status (meta response)) 200)
-   :headers {"Content-Type" "text/plain"}
+   :headers (with-headers response {"Content-Type" "text/plain"})
    :body response})
 
-(defn resolve-handler
+(defn- resolve-handler
   "Resolves a given `handler` with a given `req` by calling the handler 
   with the request and adding the path parameters to the request."
   [handler req]
@@ -105,7 +120,7 @@
                                (uri-kw-parts (:uri req) (:request/path m))))]
     (parse-response result (:response/type m))))
 
-(defn parse-request-post-body
+(defn- parse-request-post-body
   "Parses the request's POST body and returns a map of the form data."
   [req]
   (let [body (slurp (:body req))
@@ -116,13 +131,25 @@
                     params)]
     (into {} params)))
 
-(defn parse-req
+(defn- parse-request-cookies
+  "Parses the request's cookies and returns a map of the cookies."
+  [req]
+  (let [cookies (get-in req [:headers "cookie"])
+        cookies (string/split cookies #"; ")
+        cookies (map #(string/split % #"=") cookies)
+        cookies (map #(vector (keyword (first %))
+                              (second %))
+                     cookies)]
+    (into {} cookies)))
+
+(defn- parse-req
   "Parses the request and returns a map of the request's data.
   If the request is a POST request, it also parses the POST body and
   adds it to the map. It also checks the CSRF token and adds a `csrf-ok?`
   key to the map."
   [req]
   (merge req
+         {:cookies (parse-request-cookies req)}
          (when (= (:request-method req) :post)
            (let [parsed-body (parse-request-post-body req)]
              {:body parsed-body}
@@ -130,7 +157,11 @@
                           (reset! *csrf (str (random-uuid)))
                           (= (:_csrf parsed-body) csrf-token))}))))
 
-(defn app-handler
+(defn- app-handler
+  "The main handler for the application. It parses the request, checks
+  the CSRF token, and then tries to find a handler for the request. If
+  a handler is found, it resolves the handler with the request. If no
+  handler is found, it returns a 404 response."
   [req]
   (let [{:keys [csrf-ok?] :as parsed-req} (parse-req req)
         req (dissoc parsed-req :csrf-ok?)]
@@ -149,4 +180,5 @@
 (defn run [_]
   (println "Starting server on port 8080")
   (http/run-server app-handler {:port 8080}))
+
 

@@ -1,7 +1,7 @@
 (ns wordsmith.handlers
   (:require
    [hiccup2.core :as h]
-   [wordsmith.components :refer [auth-container csrf]]
+   [wordsmith.components :as components]
    [wordsmith.data :as data]))
 
 (def login
@@ -9,16 +9,10 @@
     :request/path "/admin/login"
     :response/status 200
     :response/type :html}
-  (fn [_]
-    (auth-container
+  (fn [{:keys [flash]}]
+    (components/auth-container
      "Login"
-     [:form {:method "post"}
-      (csrf)
-      [:label {:for "email"} "E-mail"]
-      [:input {:type "email" :name "email"}]
-      [:label {:for "password"} "Password"]
-      [:input {:type "password" :name "password"}]
-      [:button {:type "submit"} "Login"]])))
+     (components/login-form {:flash flash}))))
 
 (def do-login
   ^{:request/method :post
@@ -29,7 +23,7 @@
     (let [{:keys [email password]} body]
       (if-let [auth-token (data/authenticate-account email password)]
         {:to "/admin/posts"
-         :cookie {:token auth-token}}
+         :cookie [:token auth-token]}
         {:to "/admin/login"
          :flash {:error "Invalid e-mail or password."}}))))
 
@@ -37,19 +31,29 @@
   ^{:request/method :get
     :request/path "/admin/logout"
     :response/status 200
-    :response/type :html}
-  (fn [req]
-    "Logout goes here."))
+    :response/type :redirect}
+  (fn [_]
+    {:to "/admin/login"
+     :cookie [:token nil]}))
 
 (def admin-posts
   ^{:request/method :get
     :request/path "/admin/posts"
     :response/status 200
     :response/type :html}
-  (fn [req]
+  (fn [_]
     "Admin posts go here."))
 
-(def admin-post
+(def admin-create-post
+  ^{:request/method :get
+    :request/path "/admin/posts/new"
+    :response/status 200
+    :response/type :redirect}
+  (fn [_]
+    (let [id nil]
+      {:to (str "/admin/posts/" id)})))
+
+(def admin-edit-post
   ^{:request/method :get
     :request/path "/admin/posts/:id"
     :response/status 200
@@ -58,6 +62,15 @@
     (prn (:route-params req))
     "Admin post goes here."))
 
+(def admin-delete-post
+  ^{:request/method :get
+    :request/path "/admin/posts/:id/delete"
+    :response/status 200
+    :response/type :redirect}
+  (fn [req]
+    (prn (:route-params req))
+    {:to "/admin/posts"}))
+
 ;; TODO: Get site title from config.
 (def favicon
   ^{:request/method :get
@@ -65,23 +78,7 @@
     :response/status 200
     :response/type "image/svg+xml"}
   (fn [_]
-    (-> [:svg {:xmlns "http://www.w3.org/2000/svg"
-               :width "100"
-               :height "100"
-               :viewBox "0 0 100 100"}
-         [:circle {:cx "50"
-                   :cy "50"
-                   :r "50"
-                   :fill "#111"}]
-         [:text {:x "50%"
-                 :y "50%"
-                 :text-anchor "middle"
-                 :fill "#fff"
-                 :font-size "4em"
-                 :font-family "Arial, Helvetica, sans-serif"
-                 :font-weight "bold"
-                 :dy ".3em"}
-          "A"]]
+    (-> (components/favicon "A")
         h/html
         str)))
 
@@ -90,7 +87,7 @@
     :request/path "/"
     :response/status 200
     :response/type :html}
-  (fn [req]
+  (fn [_]
     "Posts go here."))
 
 (def blog-post
