@@ -4,7 +4,7 @@
 
 (defn auth-container
   "Renders a container for authentication pages."
-  [title & content]
+  [{:keys [title]} & content]
   (hpage/html5
    [:head
     [:title title]

@@ -11,7 +11,7 @@
     :response/type :html}
   (fn [{:keys [flash]}]
     (components/auth-container
-     "Login"
+     {:title "Login"}
      (components/login-form {:flash flash}))))
 
 (def do-login

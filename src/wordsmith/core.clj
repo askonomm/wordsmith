@@ -83,7 +83,7 @@
 
 (defmethod parse-response :redirect
   [response _]
-  {:status 302
+  {:status (or (:response/status (meta response)) 302)
    :headers (with-headers response {"Location" (:to response)})
    :body ""})
 
