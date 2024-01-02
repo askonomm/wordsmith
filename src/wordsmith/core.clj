@@ -52,7 +52,7 @@
                  {(keyword (subs (second %) 1)) (first %)})
               joined-parts)
          (remove nil?)
-         (into []))))
+         (into {}))))
 
 (defn- find-handler
   "Returns the first handler that matches a given `req` from a given 
@@ -150,6 +150,7 @@
   [req]
   (merge req
          {:cookies (parse-request-cookies req)}
+         {:flash @*flash-data}
          (when (= (:request-method req) :post)
            (let [parsed-body (parse-request-post-body req)]
              {:body parsed-body}
