@@ -117,9 +117,13 @@
   with the request and adding the path parameters to the request."
   [handler req]
   (let [m (meta handler)
-        result (handler (assoc req :route-params
-                               (uri-kw-parts (:uri req) (:request/path m))))]
-    (parse-response result (:response/type m))))
+        parsed-req (assoc req :route-params (uri-kw-parts (:uri req) (:request/path m)))
+        request-middleware (:request/middleware m)]
+    (if request-middleware
+      (let [middlewared-handler-fn (request-middleware parsed-req handler)
+            response-type (:response/type (meta middlewared-handler-fn))]
+        (parse-response (middlewared-handler-fn parsed-req) response-type))
+      (parse-response (handler parsed-req) (:response/type m)))))
 
 (defn- parse-request-post-body
   "Parses the request's POST body and returns a map of the form data."
@@ -184,6 +188,8 @@
   (println "Starting server on port 8080")
   (data/setup!)
   (http/run-server app-handler {:port 8080}))
+
+
 
 
 

@@ -2,7 +2,8 @@
   (:require
    [hiccup2.core :as h]
    [wordsmith.components :as components]
-   [wordsmith.data :as data]))
+   [wordsmith.data :as data]
+   [wordsmith.middleware :as middleware]))
 
 (def login
   ^{:request/method :get
@@ -39,6 +40,7 @@
 (def admin-posts
   ^{:request/method :get
     :request/path "/admin/posts"
+    :request/middleware middleware/is-authenticated?
     :response/status 200
     :response/type :html}
   (fn [_]
@@ -47,6 +49,7 @@
 (def admin-create-post
   ^{:request/method :get
     :request/path "/admin/posts/new"
+    :request/middleware middleware/is-authenticated?
     :response/status 200
     :response/type :redirect}
   (fn [_]

@@ -59,9 +59,11 @@
         (update-record! "account" {:token token})
         token))))
 
-
-
-
+(defn valid-auth-token?
+  "Checks if a given `token` is valid."
+  [token]
+  (when-let [account-record (fetch-record "account")]
+    (= (:token account-record) token)))
 
 
 
