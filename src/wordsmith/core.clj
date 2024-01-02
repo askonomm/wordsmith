@@ -5,7 +5,8 @@
    [hiccup2.core :as h]
    [org.httpkit.server :as http]
    [wordsmith.components :refer [*csrf]]
-   [wordsmith.handlers :as handlers])
+   [wordsmith.handlers :as handlers]
+   [wordsmith.data :as data])
   (:import
    (java.net URLDecoder)))
 
@@ -153,10 +154,11 @@
          {:flash @*flash-data}
          (when (= (:request-method req) :post)
            (let [parsed-body (parse-request-post-body req)]
-             {:body parsed-body}
-             {:csrf-ok? (let [csrf-token @*csrf]
-                          (reset! *csrf (str (random-uuid)))
-                          (= (:_csrf parsed-body) csrf-token))}))))
+             (merge
+              {:body parsed-body}
+              {:csrf-ok? (let [csrf-token @*csrf]
+                           (reset! *csrf (str (random-uuid)))
+                           (= (:_csrf parsed-body) csrf-token))})))))
 
 (defn- app-handler
   "The main handler for the application. It parses the request, checks
@@ -180,6 +182,8 @@
 #_:clj-kondo/ignore
 (defn run [_]
   (println "Starting server on port 8080")
+  (data/setup!)
   (http/run-server app-handler {:port 8080}))
+
 
 

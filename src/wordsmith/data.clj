@@ -5,7 +5,7 @@
   (:import
    [java.io File]))
 
-(def ^:private data-path "wordsmith/")
+(def ^:private data-path "./wordsmith/")
 
 (defn- fetch-record
   "Fetches a record from a given `path`.
@@ -38,6 +38,15 @@
     (io/make-parents full-path)
     (spit file (pr-str (merge existing-data data)))))
 
+(defn setup!
+  "Sets up the data directory."
+  []
+  (let [account-path (str data-path "account.edn")]
+    (when-not (.exists (io/file account-path))
+      (io/make-parents account-path)
+      (spit account-path {:email "wordsmith@wordsmith"
+                          :password (password/encrypt "wordsmith")}))))
+
 (defn authenticate-account
   "Authenticates an account with given `email` and `password`.
   Upon successful authentication, a new token is generated and stored
@@ -49,6 +58,8 @@
       (let [token (str (random-uuid))]
         (update-record! "account" {:token token})
         token))))
+
+
 
 
 
